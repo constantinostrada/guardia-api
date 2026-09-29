@@ -8,14 +8,17 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts up",
-    "migrate:down": "tsx src/db/migrate.ts down"
+    "migrate:down": "tsx src/db/migrate.ts down",
+    "postinstall": "./scripts/build-shared.sh",
+    "test:integration": "node --import tsx --test tests/incidents.test.ts"
   },
   "dependencies": {
     "fastify": "^5.12.5",
+    "guardia-shared": "file:../guardia-shared",
     "pg": "^8.23.0"
   },
   "devDependencies": {
