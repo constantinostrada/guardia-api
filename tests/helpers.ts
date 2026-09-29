@@ -7,6 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
+import { Writable } from "node:stream";
 import pg from "pg";
 import { loadDotEnv } from "../src/config.js";
 import { createPool } from "../src/db/pool.js";
@@ -60,21 +61,17 @@ export async function startApp(options: { databaseUrl?: string } = {}): Promise<
   if (!options.databaseUrl) await ensureTestDatabase();
 
   const logs: string[] = [];
-  const pool = createPool(databaseUrl);
-  const app = buildServer({
-    apiKey: API_KEY,
-    pool,
-    logger: {
-      level: "info",
-      stream: {
-        write(line) {
-          logs.push(line);
-          // TEST_LOGS=1 los vuelca a stderr (p. ej. para grepear la clave).
-          if (process.env.TEST_LOGS === "1") process.stderr.write(line);
-        },
-      },
+  const logStream = new Writable({
+    write(chunk, _encoding, callback) {
+      const line = String(chunk);
+      logs.push(line);
+      // TEST_LOGS=1 los vuelca a stderr (p. ej. para grepear la clave).
+      if (process.env.TEST_LOGS === "1") process.stderr.write(line);
+      callback();
     },
   });
+  const pool = createPool(databaseUrl, () => {});
+  const app = buildServer({ apiKey: API_KEY, pool, logStream });
   await app.listen({ host: "127.0.0.1", port: 0 });
   const { port } = app.server.address() as AddressInfo;
 

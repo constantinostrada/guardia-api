@@ -18,6 +18,10 @@ What: 5 simultaneous overlapping INSERTs for the same person sometimes ended in 
 
 What: guardia-shared's `persona: z.string().trim().min(1)` transforms the value; POST /shifts validates with the derived schema but stores `request.body.persona` as sent · Why: the overlap rule compares persona by exact equality of what was received (like the column), and " ana" must not collide with "ana" · Where: src/shifts/routes.ts
 
-## Fastify 5 parses text/plain by default and names bad JSON FST_ERR_CTP_INVALID_JSON_BODY
+## IncidenteSchema is a ZodEffects: pick from innerType()
 
-What: the server removes the `text/plain` parser so non-JSON bodies hit FST_ERR_CTP_INVALID_MEDIA_TYPE (mapped to 400), and maps FST_ERR_CTP_INVALID_JSON_BODY / EMPTY_JSON_BODY to 400 · Why: otherwise a text body reaches zod as a string and 415 would be returned for other types · Where: src/server.ts
+What: guardia-shared's `IncidenteSchema` ends in `.superRefine(...)`, so in zod 3 it is a `ZodEffects` without `.pick`/`.omit`; derive sub-schemas from `IncidenteSchema.innerType()` · Why: the refinement (estado ↔ cerradoEn) wraps the object; the inner object keeps field rules and `.strict()` · Where: src/incidents/schema.ts
+
+## API-key check must be an onRequest hook, and text/plain must be unregistered
+
+What: the x-api-key guard is an `onRequest` hook in the protected-routes scope (incidents and shifts), and that scope calls `removeContentTypeParser("text/plain")`; body-parse errors (`FST_ERR_CTP_*`, incl. 415) are mapped to 400 in src/errors.ts · Why: `preHandler`/`preValidation` run after body parsing, so a bad JSON body or content-type would answer 400/415 before 401 and leak that the endpoint parsed it; Fastify ships a default text/plain parser, so plain text would reach zod as a string · Where: src/server.ts, src/auth.ts, src/errors.ts

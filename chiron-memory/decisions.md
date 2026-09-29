@@ -14,10 +14,14 @@ What: `incidents.severity` is text CHECK IN ('baja','media','alta','crítica') a
 
 What: `shifts_no_overlap_per_person` = `EXCLUDE USING gist (person WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&)` (needs `btree_gist`); POST /shifts just inserts and maps 23P01 on that constraint to 409, then looks up the colliding row for the body · Why: an app-level "check then insert" lets two concurrent POSTs both succeed; half-open `[)` ranges make touching shifts (end = next start) legal · Where: migrations/0002_shifts_no_overlap.up.sql, src/shifts/repository.ts
 
-## guardia-shared consumed as a file: dependency on the sibling checkout
-
-What: package.json has `"guardia-shared": "file:../guardia-shared"`; `npm run shared:build` (run by dev-up.sh when dist is missing) does `npm ci` + build in that repo · Why: guardia-shared does not commit `dist/` nor has a `prepare` script, so a git dependency would install a package with no code · Where: package.json, scripts/dev-up.sh · Learned: if guardia-shared ever publishes or adds `prepare`, switch to a versioned/git dependency
-
 ## Integration tests use a separate guardia_test database on the compose server
 
-What: tests/helpers.ts creates `guardia_test` on the 5433 Postgres if missing, runs `runMigrations` (src/db/migrations.ts) on it, and TRUNCATEs shifts between cases; `npm test` runs node:test via tsx with `--test-concurrency=1` · Why: the user asked not to wipe dev data in the `guardia` DB; files share one table so they run serially · Where: tests/helpers.ts, package.json
+What: shift tests (tests/helpers.ts) create `guardia_test` on the 5433 Postgres if missing, run `runMigrations` (src/db/migrations.ts) on it and TRUNCATE shifts between cases; incidents tests still use DATABASE_URL (dev `guardia` DB). `npm run test:integration` runs every tests/*.test.ts with `--test-concurrency=1` · Why: the user asked that shift tests not wipe dev data in the `guardia` DB; files run serially so no two touch the same table at once · Where: tests/helpers.ts, tests/incidents.test.ts, package.json
+
+## guardia-shared consumed as file:../guardia-shared, built by postinstall (temporary)
+
+What: `package.json` depends on `"guardia-shared": "file:../guardia-shared"` (sibling checkout); `postinstall` runs `scripts/build-shared.sh`, which runs `npm install` + `npm run build` in `../guardia-shared` when its `dist/` is missing · Why: guardia-shared is not installable from git — it publishes only `files: ["dist"]`, dist is gitignored and there is no `prepare` script, so a git dependency arrives with just package.json and README (no src to compile) · Where: package.json, scripts/build-shared.sh · Learned: switch to a pinned git dependency and delete the script once guardia-shared adds `prepare`
+
+## POST /incidents rejects extra fields instead of ignoring them
+
+What: the create body is `IncidenteSchema.innerType().pick({ titulo, severidad }).strict()`; any other key (id, creadoEn, estado, cerradoEn, unknown) → 400 `unrecognized_keys`; the API sets id (`randomUUID`, v4), creadoEn (now) and estado `abierto` · Why: reusing the shared schema keeps API and guardia-shared from diverging, and strictness surfaces clients that think they can set server-owned fields · Where: src/incidents/schema.ts, src/incidents/routes.ts
