@@ -45,9 +45,19 @@ until with_timeout 5 docker compose exec -T db pg_isready -q -h 127.0.0.1 -U gua
 done
 echo "dev-up: Postgres listo en localhost:5433."
 
+if [[ ! -f ../guardia-shared/package.json ]]; then
+  fail "falta el checkout de guardia-shared junto a guardia-api (../guardia-shared)."
+fi
 if [[ ! -d node_modules ]]; then
   echo "dev-up: instalando dependencias (npm install)..."
   npm install
+fi
+
+# guardia-shared se consume como dependencia file:../guardia-shared (su dist/ no
+# está versionado): hace falta el checkout hermano y compilarlo una vez.
+if [[ ! -f node_modules/guardia-shared/dist/index.js ]]; then
+  echo "dev-up: compilando guardia-shared (npm run shared:build)..."
+  npm run --silent shared:build
 fi
 
 # Sin .env (clon recién hecho) usamos la misma URL que .env.example.
