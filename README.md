@@ -67,6 +67,12 @@ curl -i http://127.0.0.1:3000/incidents \
   -d '{"titulo":"Caída del servicio","severidad":"alta"}'
 ```
 
+### Turnos (documentado desde main)
+
+Esta seccion la escribio otra persona directo sobre main mientras la work
+order estaba en revision. Toca exactamente el mismo lugar del archivo, que
+es lo que hace que el merge no se pueda resolver solo.
+
 ## Tests de integración
 
 ```sh
