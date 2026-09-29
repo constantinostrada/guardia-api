@@ -25,3 +25,11 @@ What: guardia-shared's `IncidenteSchema` ends in `.superRefine(...)`, so in zod 
 ## API-key check must be an onRequest hook, and text/plain must be unregistered
 
 What: the x-api-key guard is an `onRequest` hook in the protected-routes scope (incidents and shifts), and that scope calls `removeContentTypeParser("text/plain")`; body-parse errors (`FST_ERR_CTP_*`, incl. 415) are mapped to 400 in src/errors.ts · Why: `preHandler`/`preValidation` run after body parsing, so a bad JSON body or content-type would answer 400/415 before 401 and leak that the endpoint parsed it; Fastify ships a default text/plain parser, so plain text would reach zod as a string · Where: src/server.ts, src/auth.ts, src/errors.ts
+
+## Keyset cursors must keep timestamptz microseconds, not JS Date milliseconds
+
+What: GET /incidents selects `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` for the cursor and compares `(created_at, id) < ($3::timestamptz, $4::uuid)` · Why: pg returns timestamptz as a Date (ms); a cursor built from it truncates µs, so rows in the same millisecond but later µs are skipped or repeated · Where: src/incidents/routes.ts, tests/incidents.list.test.ts (empates test seeds .123455/.123456/.123457)
+
+## Fastify turns a repeated query param into an array
+
+What: `?estado=a&estado=b` arrives as `estado: ["a","b"]`; the GET /incidents query schema declares each param as `z.string({ invalid_type_error })` so repetition is a 400 on that param's path · Why: without it a repeated param could slip through or produce an unclear error · Where: src/incidents/schema.ts

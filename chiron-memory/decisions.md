@@ -25,3 +25,7 @@ What: `package.json` depends on `"guardia-shared": "file:../guardia-shared"` (si
 ## POST /incidents rejects extra fields instead of ignoring them
 
 What: the create body is `IncidenteSchema.innerType().pick({ titulo, severidad }).strict()`; any other key (id, creadoEn, estado, cerradoEn, unknown) → 400 `unrecognized_keys`; the API sets id (`randomUUID`, v4), creadoEn (now) and estado `abierto` · Why: reusing the shared schema keeps API and guardia-shared from diverging, and strictness surfaces clients that think they can set server-owned fields · Where: src/incidents/schema.ts, src/incidents/routes.ts
+
+## GET /incidents cursor: AES-256-GCM token carrying position and filters
+
+What: the pagination cursor is base64url(iv | AES-256-GCM(JSON {c: created_at with µs, i: id, f: canonical filters}) | tag), key = HKDF-SHA256 of INCIDENTS_API_KEY; decode failure → 400 "El cursor no es válido", filter mismatch → 400 "no corresponde a estos filtros" (path ["cursor"]); severity sets are canonicalised in SEVERIDADES order, so `alta,baja` = `baja,alta` · Why: the work order requires an opaque cursor (no ids/dates in clear), tamper detection and rejecting a cursor reused with other filters; deriving the key from the API key keeps cursors valid across restarts without a new secret · Where: src/incidents/cursor.ts, src/incidents/routes.ts · Learned: rotating INCIDENTS_API_KEY invalidates all outstanding cursors (400), which is acceptable
