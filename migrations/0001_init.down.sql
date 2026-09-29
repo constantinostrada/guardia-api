@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS shifts;
+DROP TABLE IF EXISTS incidents;
