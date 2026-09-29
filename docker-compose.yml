@@ -1,0 +1,23 @@
+# Sólo la base de datos de desarrollo. La API corre en el host (npm run dev).
+# Publicada en 5433 para no chocar con un Postgres local en 5432.
+name: guardia-api
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: guardia
+      POSTGRES_PASSWORD: guardia
+      POSTGRES_DB: guardia
+    ports:
+      - "5433:5432"
+    volumes:
+      - guardia-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "guardia", "-d", "guardia"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  guardia-db-data:
