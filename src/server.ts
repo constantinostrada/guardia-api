@@ -33,7 +33,7 @@ export function buildServer({ apiKey, pool, logStream }: ServerOptions): Fastify
     protectedRoutes.addHook("onRequest", apiKeyGuard(apiKey));
     // Sólo JSON: sin esto Fastify aceptaría text/plain y lo pasaría como string.
     protectedRoutes.removeContentTypeParser("text/plain");
-    await protectedRoutes.register(incidentsRoutes, { pool });
+    await protectedRoutes.register(incidentsRoutes, { pool, apiKey });
     await protectedRoutes.register(shiftRoutes, { pool });
   });
 

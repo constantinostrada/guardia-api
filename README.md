@@ -67,6 +67,67 @@ curl -i http://127.0.0.1:3000/incidents \
   -d '{"titulo":"Caída del servicio","severidad":"alta"}'
 ```
 
+### `GET /incidents`
+
+Lista incidentes, paginados por cursor.
+
+- **Cabecera obligatoria:** `x-api-key: <INCIDENTS_API_KEY>`. Se comprueba antes
+  que los parámetros: sin clave válida es 401 aunque la query sea inválida.
+- **Parámetros de consulta** (todos opcionales; cualquier otro, o uno repetido, da 400):
+
+  | Parámetro | Valores | Por defecto |
+  | --------- | ------- | ----------- |
+  | `severidad` | Una o varias de `baja` · `media` · `alta` · `crítica` separadas por coma (`severidad=alta,crítica`): incidentes de cualquiera de ellas. Exactas, en minúsculas y con tilde; un solo valor inválido en la lista da 400 | Todas |
+  | `estado` | `abierto` o `cerrado` | Ambos |
+  | `limite` | Tamaño de página, entero de 1 a **100** | **20** |
+  | `cursor` | El `siguienteCursor` de la respuesta anterior | Primera página |
+
+  Los valores válidos de severidad y estado vienen de guardia-shared. Los dos
+  filtros se combinan (intersección).
+
+- **Orden:** más recientes primero — `creadoEn` descendente y, a igual instante,
+  `id` descendente. Es determinista: incidentes con el mismo `creadoEn` nunca se
+  saltan ni se repiten entre páginas.
+- **Respuesta 200:**
+
+  ```json
+  {
+    "incidentes": [
+      { "id": "…", "titulo": "Caída del servicio", "severidad": "alta", "estado": "cerrado",
+        "creadoEn": "2026-03-01T10:00:00.123Z", "cerradoEn": "2026-03-01T11:00:00.123Z" }
+    ],
+    "siguienteCursor": "opaco…"
+  }
+  ```
+
+  Cada incidente tiene la forma de `Incidente` de guardia-shared (`cerradoEn`
+  sólo si está cerrado). Sin resultados es `200` con `"incidentes": []` y
+  `"siguienteCursor": null`, nunca 404.
+
+- **Seguir el cursor:** si `siguienteCursor` no es `null`, pedí la página
+  siguiente con `cursor=<siguienteCursor>` y **los mismos `severidad` y
+  `estado`** (el orden de la lista de severidades da igual; `limite` puede
+  cambiar). Repetí hasta que `siguienteCursor` sea `null`. El cursor es opaco
+  (cifrado y autenticado): no se puede leer ni editar; uno malformado o
+  manipulado, o usado con otros filtros, da 400.
+
+| Respuesta | Cuándo | Cuerpo |
+| --------- | ------ | ------ |
+| `200` | Siempre que la request sea válida | `{ incidentes, siguienteCursor }` |
+| `400` | Parámetro inválido, desconocido o repetido | `{ "error": "...", "issues": [{ "path": ["severidad", 1], "message": "...", "code": "..." }] }` (detalle de zod; `path[0]` es el parámetro; en desconocidos `path` es `[]` y `keys` los lista) |
+| `400` | Cursor malformado o manipulado | `{ "error": "El cursor no es válido", "issues": [{ "path": ["cursor"], ... }] }` |
+| `400` | Cursor generado con otros filtros | `{ "error": "El cursor no corresponde a estos filtros: ...", "issues": [{ "path": ["cursor"], ... }] }` |
+| `401` | Sin `x-api-key`, vacía o incorrecta | `{ "error": "No autorizado" }` |
+| `500` | Fallo interno (p. ej. la base no responde) | `{ "error": "Error interno del servidor" }`; el detalle queda sólo en el log |
+
+```sh
+curl -s "http://127.0.0.1:3000/incidents?severidad=alta,cr%C3%ADtica&estado=abierto&limite=10" \
+  -H "x-api-key: $INCIDENTS_API_KEY"
+# página siguiente: mismos filtros + cursor
+curl -s "http://127.0.0.1:3000/incidents?severidad=alta,cr%C3%ADtica&estado=abierto&limite=10&cursor=$CURSOR" \
+  -H "x-api-key: $INCIDENTS_API_KEY"
+```
+
 ### Turnos (documentado desde main)
 
 Esta seccion la escribio otra persona directo sobre main mientras la work
@@ -139,13 +200,13 @@ npm run test:integration
 Levantan la app en un puerto efímero y hacen requests HTTP reales contra el
 Postgres del compose (5433); no hay mocks. Los archivos corren en serie.
 
-- **Incidentes** (`tests/incidents.test.ts`) usan `DATABASE_URL` de `.env` (por
+- **Alta de incidentes** (`tests/incidents.test.ts`) usan `DATABASE_URL` de `.env` (por
   defecto la base `guardia`) y **vacían la tabla `incidents`** antes de cada caso
   y al terminar, así que borran los incidentes de la base de desarrollo. Si la
   base no está disponible fallan de entrada con
   `La base del compose no está disponible en ...`.
-- **Turnos** (`tests/shifts.*.test.ts`, `tests/auth.test.ts`,
-  `tests/db-failure.test.ts`) usan una base aparte, **`guardia_test`**, en el
+- **Turnos y listado de incidentes** (`tests/shifts.*.test.ts`,
+  `tests/incidents.list.test.ts`, `tests/auth.test.ts`, `tests/db-failure.test.ts`) usan una base aparte, **`guardia_test`**, en el
   mismo servidor, que se crea y migra sola; no tocan los datos de desarrollo.
   `TEST_DATABASE_URL` permite apuntar a otra base. Con `TEST_LOGS=1` los logs de
   la app se vuelcan a stderr.

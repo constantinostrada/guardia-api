@@ -19,7 +19,8 @@
   "dependencies": {
     "fastify": "^5.12.5",
     "guardia-shared": "file:../guardia-shared",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
