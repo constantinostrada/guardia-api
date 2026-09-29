@@ -14,7 +14,7 @@
     "migrate": "tsx src/db/migrate.ts up",
     "migrate:down": "tsx src/db/migrate.ts down",
     "postinstall": "./scripts/build-shared.sh",
-    "test:integration": "node --import tsx --test tests/incidents.test.ts"
+    "test:integration": "node --import tsx --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": {
     "fastify": "^5.12.5",

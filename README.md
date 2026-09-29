@@ -73,6 +73,62 @@ Esta seccion la escribio otra persona directo sobre main mientras la work
 order estaba en revision. Toca exactamente el mismo lugar del archivo, que
 es lo que hace que el merge no se pueda resolver solo.
 
+Las rutas de turnos (`Turno` de guardia-shared) usan la misma cabecera y
+devuelven turnos con esta forma, fechas ISO 8601 en UTC:
+
+```json
+{ "id": "uuid v4", "persona": "ana", "desde": "2030-01-01T08:00:00.000Z", "hasta": "2030-01-01T16:00:00.000Z" }
+```
+
+### `POST /shifts`
+
+Crea un turno.
+
+- **Cabecera obligatoria:** `x-api-key: <INCIDENTS_API_KEY>`. Se comprueba antes
+  que el cuerpo.
+- **Cuerpo** (`Content-Type: application/json`), exactamente estos tres campos:
+
+  ```json
+  { "persona": "ana", "desde": "2030-01-01T08:00:00Z", "hasta": "2030-01-01T16:00:00Z" }
+  ```
+
+  Reglas del schema `Turno` de guardia-shared: `persona` no vacía, `desde` y
+  `hasta` ISO 8601 UTC, `hasta` estrictamente posterior a `desde`. **No se
+  admiten campos extra** (tampoco `id`: lo genera la API, UUID v4).
+
+**Solapamiento.** Los turnos son intervalos medio-abiertos `[desde, hasta)`. Un
+turno nuevo no puede compartir ningún instante con otro turno de la **misma
+persona**. Tocarse en el borde exacto **no** es solapar: con ana de 08:00 a
+16:00, ana de 16:00 a 22:00 se crea (201), pero ana de 07:00 a 08:00:01 no
+(409). Personas distintas pueden coincidir libremente. `persona` se compara por
+igualdad exacta del valor recibido (`"ana"`, `"Ana"` y `" ana"` son personas
+distintas). Lo garantiza la base (restricción de exclusión
+`shifts_no_overlap_per_person`), también ante requests simultáneas.
+
+| Respuesta | Cuándo | Cuerpo |
+| --------- | ------ | ------ |
+| `201` | Creado | El turno persistido: `{ id, persona, desde, hasta }` |
+| `400` | El cuerpo no valida | `{ "error": "Cuerpo inválido", "detalles": [{ "path": ["hasta"], "message": "..." }] }` (detalle de zod; en campos extra `path` es `[]` y `keys` los lista) |
+| `400` | El cuerpo no es JSON o el content-type no es JSON | `{ "error": "..." }` |
+| `401` | Sin `x-api-key`, vacía o incorrecta | `{ "error": "No autorizado" }` |
+| `409` | Se solapa con otro turno de la misma persona; no se guarda nada | `{ "error": "...", "conflicto": { id, persona, desde, hasta } }` con el turno existente |
+| `500` | Fallo interno (p. ej. la base no responde) | `{ "error": "Error interno del servidor" }`; el detalle queda sólo en el log |
+
+### `GET /shifts/current`
+
+Quién está de guardia ahora (reloj del servidor, UTC). Un turno está activo si
+`desde ≤ ahora < hasta`: el que termina justo ahora ya no cuenta, el que empieza
+justo ahora sí.
+
+- **Cabecera obligatoria:** `x-api-key: <INCIDENTS_API_KEY>`.
+
+| Respuesta | Cuándo | Cuerpo |
+| --------- | ------ | ------ |
+| `200` | Hay al menos un turno activo | Lista de todos los turnos activos (varias personas a la vez aparecen todas), ordenada por `desde` ascendente y luego por `id` |
+| `204` | Nadie de guardia | Sin cuerpo |
+| `401` | Sin `x-api-key`, vacía o incorrecta | `{ "error": "No autorizado" }` |
+| `500` | Fallo interno | `{ "error": "Error interno del servidor" }` |
+
 ## Tests de integración
 
 ```sh
@@ -81,11 +137,18 @@ npm run test:integration
 ```
 
 Levantan la app en un puerto efímero y hacen requests HTTP reales contra el
-Postgres del compose (usa `DATABASE_URL` de `.env`, por defecto
-`localhost:5433`); no hay mocks. **Vacían la tabla `incidents`** antes de cada
-caso y al terminar, así que borran los incidentes de la base de desarrollo. Si
-la base no está disponible fallan de entrada con
-`La base del compose no está disponible en ...`.
+Postgres del compose (5433); no hay mocks. Los archivos corren en serie.
+
+- **Incidentes** (`tests/incidents.test.ts`) usan `DATABASE_URL` de `.env` (por
+  defecto la base `guardia`) y **vacían la tabla `incidents`** antes de cada caso
+  y al terminar, así que borran los incidentes de la base de desarrollo. Si la
+  base no está disponible fallan de entrada con
+  `La base del compose no está disponible en ...`.
+- **Turnos** (`tests/shifts.*.test.ts`, `tests/auth.test.ts`,
+  `tests/db-failure.test.ts`) usan una base aparte, **`guardia_test`**, en el
+  mismo servidor, que se crea y migra sola; no tocan los datos de desarrollo.
+  `TEST_DATABASE_URL` permite apuntar a otra base. Con `TEST_LOGS=1` los logs de
+  la app se vuelcan a stderr.
 
 ## Scripts
 

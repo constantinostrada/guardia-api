@@ -50,6 +50,10 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
+# postinstall compila guardia-shared, pero si node_modules ya existía y falta su
+# dist/ (p. ej. checkout hermano recién clonado) npm install no corre: forzarlo.
+./scripts/build-shared.sh
+
 # Sin .env (clon recién hecho) usamos la misma URL que .env.example.
 if [[ -z "${DATABASE_URL:-}" && ! -f .env ]]; then
   export DATABASE_URL="postgres://guardia:guardia@localhost:5433/guardia"

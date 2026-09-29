@@ -3,6 +3,7 @@ import type pg from "pg";
 import { apiKeyGuard } from "./auth.js";
 import { errorHandler } from "./errors.js";
 import { incidentsRoutes } from "./incidents/routes.js";
+import { shiftRoutes } from "./shifts/routes.js";
 
 export interface ServerOptions {
   apiKey: string;
@@ -24,13 +25,16 @@ export function buildServer({ apiKey, pool, logStream }: ServerOptions): Fastify
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  app.register(async (incidents) => {
+  // Rutas protegidas por x-api-key (incidentes y turnos). El hook se declara una
+  // sola vez aquí; toda ruta que necesite la clave se registra en este scope.
+  app.register(async (protectedRoutes) => {
     // onRequest corre antes de parsear el cuerpo: sin clave válida es 401 aunque
     // el cuerpo sea inválido o no sea JSON, sin revelar nada del schema.
-    incidents.addHook("onRequest", apiKeyGuard(apiKey));
+    protectedRoutes.addHook("onRequest", apiKeyGuard(apiKey));
     // Sólo JSON: sin esto Fastify aceptaría text/plain y lo pasaría como string.
-    incidents.removeContentTypeParser("text/plain");
-    await incidents.register(incidentsRoutes, { pool });
+    protectedRoutes.removeContentTypeParser("text/plain");
+    await protectedRoutes.register(incidentsRoutes, { pool });
+    await protectedRoutes.register(shiftRoutes, { pool });
   });
 
   return app;
