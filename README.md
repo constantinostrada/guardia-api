@@ -128,12 +128,6 @@ curl -s "http://127.0.0.1:3000/incidents?severidad=alta,cr%C3%ADtica&estado=abie
   -H "x-api-key: $INCIDENTS_API_KEY"
 ```
 
-### Turnos (documentado desde main)
-
-Esta seccion la escribio otra persona directo sobre main mientras la work
-order estaba en revision. Toca exactamente el mismo lugar del archivo, que
-es lo que hace que el merge no se pueda resolver solo.
-
 Las rutas de turnos (`Turno` de guardia-shared) usan la misma cabecera y
 devuelven turnos con esta forma, fechas ISO 8601 en UTC:
 
